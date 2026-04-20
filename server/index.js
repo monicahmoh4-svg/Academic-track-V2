@@ -28,11 +28,7 @@ const { notifRouter, msgRouter } = require('./routes/communications');
 app.use('/api/notifications', notifRouter);
 app.use('/api/messages',      msgRouter);
 
-app.get('/health', (_req, res) => res.json({
-  status: 'ok',
-  timestamp: new Date().toISOString(),
-  env: process.env.NODE_ENV || 'development',
-}));
+app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 if (process.env.NODE_ENV === 'production') {
   const clientBuild = path.join(__dirname, 'public', 'client');
@@ -72,7 +68,7 @@ async function ensureAdmin(attempt) {
     const bcrypt    = require('bcryptjs');
     const { query } = require('./db');
 
-    // Step 1: ensure the extension and table exist regardless of schema.sql
+    // Always create extension and table first — works even if schema.sql was never run
     await query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await query(`
       CREATE TABLE IF NOT EXISTS moderators (
@@ -87,10 +83,11 @@ async function ensureAdmin(attempt) {
       )
     `);
 
-    // Step 2: hash the password at runtime and upsert admin
-    const username = process.env.ADMIN_USERNAME || 'academitrack_admin';
-    const password = process.env.ADMIN_PASSWORD || 'Admin@Academi2025';
-    const hash     = await bcrypt.hash(password, 12);
+    const username = process.env.ADMIN_USERNAME || 'superadmin';
+    const password = process.env.ADMIN_PASSWORD || 'superadmin123';
+
+    // Hash is generated at runtime — never a pre-computed value
+    const hash = await bcrypt.hash(password, 12);
 
     await query(
       `INSERT INTO moderators (name, username, email, password_hash, role, is_active)
@@ -103,27 +100,26 @@ async function ensureAdmin(attempt) {
       ['System Administrator', username, 'admin@academitrack.edu', hash]
     );
 
-    console.log(`\n🔑  Admin ready (attempt ${attempt}/${MAX})`);
-    console.log(`    Username : ${username}`);
-    console.log(`    Password : ${password}`);
-    console.log(`    Portal   : /admin/\n`);
+    console.log('\n=============================');
+    console.log('  ADMIN CREDENTIALS READY');
+    console.log('=============================');
+    console.log(`  Username : ${username}`);
+    console.log(`  Password : ${password}`);
+    console.log(`  Portal   : /admin/`);
+    console.log('=============================\n');
 
   } catch (err) {
-    console.warn(`⚠️  Admin seed attempt ${attempt}/${MAX} failed: ${err.message}`);
+    console.warn(`Admin seed attempt ${attempt}/${MAX} failed: ${err.message}`);
     if (attempt < MAX) {
       await sleep(3000);
       await ensureAdmin(attempt + 1);
     } else {
-      console.error('❌  Admin seed failed after all retries.');
-      console.error('    Check DATABASE_URL env var is set in Railway.');
-      console.error('    Then run schema.sql manually in the Railway PostgreSQL Query tab.');
+      console.error('Admin seed failed after all retries. Check DATABASE_URL in Railway Variables.');
     }
   }
 }
 
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`\n✅  AcademiTrack on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
-  console.log(`    Student : http://localhost:${PORT}/`);
-  console.log(`    Admin   : http://localhost:${PORT}/admin/`);
+  console.log(`\nAcademiTrack running on port ${PORT}`);
   await ensureAdmin();
 });
