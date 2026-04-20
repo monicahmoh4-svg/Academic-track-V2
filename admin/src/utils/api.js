@@ -1,4 +1,3 @@
-// utils/api.js
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -9,16 +8,11 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// NOTE: No 401 redirect interceptor here — that was silently eating login errors.
+// Each page handles auth failures individually.
 api.interceptors.response.use(
   r => r,
-  err => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('adm_token');
-      localStorage.removeItem('adm_user');
-      window.location.href = '/admin/';
-    }
-    return Promise.reject(err);
-  }
+  err => Promise.reject(err)
 );
 
 export default api;
