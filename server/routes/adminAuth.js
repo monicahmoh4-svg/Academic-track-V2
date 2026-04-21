@@ -6,7 +6,6 @@ const { signToken, authAdmin } = require('../middleware/auth');
 // POST /api/admin/auth/login
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required.' });
   }
@@ -19,21 +18,16 @@ router.post('/login', async (req, res) => {
     );
   } catch (dbErr) {
     console.error('LOGIN DB ERROR:', dbErr.message);
-    return res.status(500).json({
-      error: 'Database error — the moderators table may not exist. Check Railway logs.',
-    });
+    return res.status(500).json({ error: 'Database error.' });
   }
 
   if (!r.rows.length) {
-    console.log(`Login failed: username "${username}" not found in DB`);
+    console.log(`Login failed: username "${username}" not found`);
     return res.status(401).json({ error: 'Invalid credentials.' });
   }
 
   const mod = r.rows[0];
-
-  if (!mod.is_active) {
-    return res.status(403).json({ error: 'Account deactivated.' });
-  }
+  if (!mod.is_active) return res.status(403).json({ error: 'Account deactivated.' });
 
   const valid = await bcrypt.compare(password, mod.password_hash);
   if (!valid) {
@@ -56,27 +50,47 @@ router.get('/me', authAdmin, async (req, res) => {
   res.json(r.rows[0]);
 });
 
-// GET /api/admin/auth/check  — verify DB state from browser, no auth needed
-// Visit: https://your-app.railway.app/api/admin/auth/check
+// GET /api/admin/auth/check — see DB state
 router.get('/check', async (req, res) => {
   try {
-    const result = await query(
-      'SELECT id, username, role, is_active, created_at FROM moderators'
-    );
+    const result = await query('SELECT id, username, role, is_active, created_at FROM moderators');
     res.json({
       moderator_count: result.rowCount,
       moderators: result.rows,
-      env_username: process.env.ADMIN_USERNAME || '(not set — using default: superadmin)',
+      env_username: process.env.ADMIN_USERNAME || 'superadmin',
       env_password_set: !!process.env.ADMIN_PASSWORD,
-      message: result.rowCount === 0
-        ? 'No admins found. Server seed may have failed. Check Railway deploy logs.'
-        : 'Admin exists. Use the username shown above to log in.',
     });
   } catch (err) {
-    res.status(500).json({
-      error: err.message,
-      message: 'DB error — moderators table may not exist. schema.sql may not have been run.',
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/auth/reset — DELETES all admins and creates fresh one from env vars
+// Visit this URL once: https://your-app.railway.app/api/admin/auth/reset
+router.get('/reset', async (req, res) => {
+  try {
+    const username = process.env.ADMIN_USERNAME || 'superadmin';
+    const password = process.env.ADMIN_PASSWORD || 'superadmin123';
+    const hash = await bcrypt.hash(password, 12);
+
+    // Delete ALL existing admins then insert fresh
+    await query('DELETE FROM moderators');
+    await query(
+      `INSERT INTO moderators (name, username, email, password_hash, role, is_active)
+       VALUES ($1, $2, $3, $4, 'Super Admin', TRUE)`,
+      ['System Administrator', username, 'admin@academitrack.edu', hash]
+    );
+
+    res.json({
+      success: true,
+      message: `All old admins deleted. New admin created.`,
+      username,
+      password,
+      login_url: '/admin/',
+      next: 'Go to /admin/ and log in with the username and password shown above.',
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
