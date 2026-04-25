@@ -11,7 +11,11 @@ const fs        = require('fs');
 const app  = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(helmet({
+  contentSecurityPolicy:     false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 app.use(cors({ origin: true, credentials: true }));
 app.use('/api/auth',       rateLimit({ windowMs: 15 * 60 * 1000, max: 30,  message: { error: 'Too many requests.' } }));
 app.use('/api/admin/auth', rateLimit({ windowMs: 15 * 60 * 1000, max: 15,  message: { error: 'Too many login attempts.' } }));
@@ -28,7 +32,11 @@ const { notifRouter, msgRouter } = require('./routes/communications');
 app.use('/api/notifications', notifRouter);
 app.use('/api/messages',      msgRouter);
 
-app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/health', (_req, res) => res.json({
+  status: 'ok',
+  timestamp: new Date().toISOString(),
+  env: process.env.NODE_ENV || 'development',
+}));
 
 if (process.env.NODE_ENV === 'production') {
   const clientBuild = path.join(__dirname, 'public', 'client');
@@ -59,16 +67,19 @@ app.use((err, _req, res, _next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error.' });
 });
 
+// ── Admin seed with retry ─────────────────────────────────
+// Render free tier: DB can take 30-40s to accept connections on cold boot.
+// 8 retries × 5s = 40s total — covers even the slowest Render cold starts.
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function ensureAdmin(attempt) {
   attempt = attempt || 1;
-  const MAX = 5;
+  const MAX = 8;
   try {
     const bcrypt    = require('bcryptjs');
     const { query } = require('./db');
 
-    // Always create extension and table first — works even if schema.sql was never run
+    // Create extension and table if they don't exist yet
     await query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await query(`
       CREATE TABLE IF NOT EXISTS moderators (
@@ -86,7 +97,7 @@ async function ensureAdmin(attempt) {
     const username = process.env.ADMIN_USERNAME || 'superadmin';
     const password = process.env.ADMIN_PASSWORD || 'superadmin123';
 
-    // Hash is generated at runtime — never a pre-computed value
+    // Hash generated fresh at runtime — never hardcoded
     const hash = await bcrypt.hash(password, 12);
 
     await query(
@@ -111,15 +122,19 @@ async function ensureAdmin(attempt) {
   } catch (err) {
     console.warn(`Admin seed attempt ${attempt}/${MAX} failed: ${err.message}`);
     if (attempt < MAX) {
-      await sleep(3000);
+      console.log(`  Retrying in 5s...`);
+      await sleep(5000);
       await ensureAdmin(attempt + 1);
     } else {
-      console.error('Admin seed failed after all retries. Check DATABASE_URL in Railway Variables.');
+      console.error('Admin seed failed after all retries.');
+      console.error('Check DATABASE_URL env var is set correctly in Render dashboard.');
     }
   }
 }
 
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`\nAcademiTrack running on port ${PORT}`);
+  console.log(`\nAcademiTrack running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
+  console.log(`Student : http://localhost:${PORT}/`);
+  console.log(`Admin   : http://localhost:${PORT}/admin/`);
   await ensureAdmin();
 });
