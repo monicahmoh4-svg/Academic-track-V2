@@ -1,20 +1,29 @@
 const { Pool } = require('pg');
 
+// Render provides DATABASE_URL as postgres:// but pg needs postgresql://
+const connectionString = process.env.DATABASE_URL
+  ? process.env.DATABASE_URL.replace(/^postgres:\/\//, 'postgresql://')
+  : undefined;
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20,
+  connectionString,
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : false,
+  max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 5000,
 });
 
-pool.on('error', (err) => console.error('DB pool error:', err));
+pool.on('error', (err) => {
+  console.error('DB pool error:', err.message);
+});
 
 async function query(text, params) {
   try {
     return await pool.query(text, params);
   } catch (err) {
-    console.error('DB error:', err, text.substring(0, 100));
+    console.error('DB error:', err.message);
     throw err;
   }
 }
