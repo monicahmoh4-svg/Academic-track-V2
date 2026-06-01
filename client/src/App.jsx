@@ -11,8 +11,9 @@ import AdminDashboard from './pages/AdminDashboard';
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f5ff' }}>
-      <span className="spin" style={{ width: 28, height: 28, borderWidth: 3 }} />
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#f0f5ff' }}>
+      <span style={{ display:'inline-block', width:28, height:28, border:'3px solid #bfdbfe', borderTopColor:'#1a56db', borderRadius:'50%', animation:'sp .65s linear infinite' }} />
+      <style>{`@keyframes sp { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
   return user ? children : <Navigate to="/login" replace />;
@@ -24,7 +25,7 @@ export default function App() {
       <AuthProvider>
         <AdminProvider>
           <Routes>
-            {/* Public routes */}
+            {/* Public */}
             <Route path="/"         element={<Landing />} />
             <Route path="/login"    element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
