@@ -11,8 +11,8 @@ import AdminDashboard from './pages/AdminDashboard';
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#f0f5ff' }}>
-      <span className="spin" style={{ width:28, height:28, borderWidth:3 }} />
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f5ff' }}>
+      <span className="spin" style={{ width: 28, height: 28, borderWidth: 3 }} />
     </div>
   );
   return user ? children : <Navigate to="/login" replace />;
@@ -24,14 +24,23 @@ export default function App() {
       <AuthProvider>
         <AdminProvider>
           <Routes>
-            <Route path="/"              element={<Landing />} />
-            <Route path="/login"         element={<LoginPage />} />
-            <Route path="/register"      element={<RegisterPage />} />
-            <Route path="/app/*"         element={<PrivateRoute><AppPage /></PrivateRoute>} />
-            <Route path="/admin/login"   element={<AdminLogin onLogin={() => window.location.replace('/admin/dashboard')} />} />
+            {/* Public routes */}
+            <Route path="/"         element={<Landing />} />
+            <Route path="/login"    element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+
+            {/* Student portal — protected */}
+            <Route path="/app/*" element={<PrivateRoute><AppPage /></PrivateRoute>} />
+
+            {/* Admin portal */}
+            <Route path="/admin/login"
+              element={<AdminLogin onLogin={() => window.location.replace('/admin/dashboard')} />}
+            />
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin"         element={<Navigate to="/admin/login" replace />} />
-            <Route path="*"              element={<Navigate to="/" replace />} />
+            <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <Toast />
         </AdminProvider>
